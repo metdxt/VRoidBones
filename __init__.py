@@ -7,7 +7,7 @@ bl_info = {
     "name": "VRoid Bones",
     "description": "Make it pretty button for VRoid skeletons.",
     "author": "Crystal Melting Dot",
-    "version": (1, 5),
+    "version": (1, 6),
     "blender": (2, 80, 0),
     "category": "Rigging",
     "tracker_url": "https://github.com/cmd410/VRoidBones/issues",
@@ -32,14 +32,14 @@ def simplify_symmetrize_names():
         side = parts[-2]
         name = parts[-1]
         if side not in {'R', 'L'}:
-            if settings.simplify_names and name != 'end': 
+            if settings.simplify_names and name != 'end':
                 bone.name = name
                 vg_remap[original_name] = bone.name
             continue
-        if settings.symmetrize: 
+        if settings.symmetrize:
             bone.name = f'{name}_{side}'
             vg_remap[original_name] = bone.name
-    
+
     # Need to make sure all vertex groups are properly renamed
     # they are not renamed automaticaly all the times for some reason
     armature = bpy.context.object
@@ -58,48 +58,80 @@ def fix_bones_chains():
 
     def disconnect_child(bone):
         bone.use_connect = False
-    
+
     bpy.ops.armature.select_all(action='DESELECT')
     bones = bpy.context.active_object.data.edit_bones
     exceptions = ['Sleeve','Skirt','Bust','FaceEye',
                   'HairJoint', 'Tops', 'Food', 'Hood']
+
+    limb_hierarchy = {
+        'UpperLeg': 'LowerLeg',
+        'LowerLeg': 'Foot',
+        'UpperArm': 'LowerArm',
+        'LowerArm': 'Hand'
+    }
+
     for bone in bones:
         children = bone.children
         if not children:
             continue
-        target = children[0]
-        chosen = True
-        if len(children) > 1:
-            chosen = False
+
+        # Check if this bone is part of a limb hierarchy
+        is_limb_bone = False
+        expected_child = None
+        for prefix in limb_hierarchy:
+            if bone.name.startswith(prefix):
+                expected_child = limb_hierarchy[prefix]
+                is_limb_bone = True
+                break
+
+        target = None
+        if is_limb_bone:
+            # First try to find the expected child bone
+            for child in children:
+                if child.name.startswith(expected_child):
+                    target = child
+                    break
+            # If not found, proceed with normal selection
+            if not target:
+                target = children[0]
+        else:
+            target = children[0]
+
+        # Skip if we couldn't find a target
+        if not target:
+            continue
+
+        # Handle cases where there are multiple children
+        if len(children) > 1 and not is_limb_bone:
             for candidate in children:
                 valid = True
                 for ex in exceptions:
-                    if ex in candidate.name: 
+                    if ex in candidate.name:
                         disconnect_child(candidate)
                         valid = False
                         break
                 if valid:
                     target = candidate
-                    chosen = True
                     break
-        if not chosen: continue
-        if bone.name.startswith('Hand_'):
-            continue
+
         bone.select_tail = True
         offset = target.head - bone.tail
         bpy.ops.transform.translate(value=offset)
         bone.select_tail = False
 
-        if bone.name.lower() == 'root': 
+        if bone.name.lower() == 'root':
             bone.select_tail = True
             bpy.ops.transform.translate(value=(0,0,-bone.length * 0.8))
             bone.select_tail = False
             continue
+
         # Connect bones
         bones.active = bone
         target.select = True
         bpy.ops.armature.parent_set(type='CONNECTED')
         bpy.ops.armature.select_all(action='DESELECT')
+
 
 
 def clear_leaf_bones():
@@ -141,18 +173,18 @@ class VRoidFixOperator(bpy.types.Operator):
     bl_idname = "bones.vroid_fix"
     bl_label = "Fix Armature"
     bl_options = {'UNDO'}
-    
+
     @classmethod
     def poll(cls, context):
         return context.mode == 'EDIT_ARMATURE'
-    
+
     def execute(self, context):
         settings = bpy.context.scene.vroid_params
-        if settings.symmetrize or settings.simplify_names: 
+        if settings.symmetrize or settings.simplify_names:
             simplify_symmetrize_names()
-        if settings.bone_chains: 
+        if settings.bone_chains:
             fix_bones_chains()
-        if settings.leaf_bones: 
+        if settings.leaf_bones:
             clear_leaf_bones()
         self.report({'INFO'}, 'Armature was fixed!')
         return {'FINISHED'}
@@ -163,11 +195,11 @@ class VRoidIKOperator(bpy.types.Operator):
     bl_idname = "bones.vroid_ik"
     bl_label = "Setup IK"
     bl_options = {'UNDO'}
-    
+
     @classmethod
     def poll(cls, context):
         return context.mode == 'EDIT_ARMATURE'
-    
+
     def execute(self, context):
         setup_ik()
         self.report({'INFO'}, 'IK was setup!')
@@ -179,11 +211,11 @@ class VRoidFingersOperator(bpy.types.Operator):
     bl_idname = "bones.vroid_fingers"
     bl_label = "Add fingers constraints"
     bl_options = {'UNDO'}
-    
+
     @classmethod
     def poll(cls, context):
         return context.mode == 'EDIT_ARMATURE'
-    
+
     def execute(self, context):
         add_finger_constraitns()
         self.report({'INFO'}, 'Finger constraints were setup!')
@@ -195,11 +227,11 @@ class VRoidLimitsOperator(bpy.types.Operator):
     bl_idname = "bones.vroid_rotlimits"
     bl_label = "Add Rotation limits"
     bl_options = {'UNDO'}
-    
+
     @classmethod
     def poll(cls, context):
         return context.mode == 'EDIT_ARMATURE'
-    
+
     def execute(self, context):
         add_rotation_limits()
         self.report({'INFO'}, 'Rotation limits were added!')
@@ -211,11 +243,11 @@ class VRoidCleanerOperator(bpy.types.Operator):
     bl_idname = "bones.vroid_cleanup"
     bl_label = "Clean skeleton"
     bl_options = {'UNDO'}
-    
+
     @classmethod
     def poll(cls, context):
         return context.mode == 'EDIT_ARMATURE'
-    
+
     def execute(self, context):
         def check_chain(root):
             children = root.children
