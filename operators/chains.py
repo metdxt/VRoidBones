@@ -20,9 +20,10 @@ class VRoidFixChainsOperator(bpy.types.Operator):
         simplify_symmetrize_names()
         fix_bones_chains()
         clear_leaf_bones()
-        self.report({"INFO"}, "Armature was fixed!")
         
         if mode != 'EDIT_ARMATURE':
             bpy.ops.object.editmode_toggle()
+        
+        self.report({"INFO"}, "Armature was fixed!")
         
         return {"FINISHED"}
