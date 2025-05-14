@@ -24,5 +24,6 @@ class VRoidCleanerOperator(bpy.types.Operator):
                 print(f"Marked as junk: {[b.name for b in chain]}")  # Debug
                 junk_bones.update(b.name for b in chain)
 
+        delete_bones_and_cleanup(junk_bones)
 
         return {'FINISHED'}
